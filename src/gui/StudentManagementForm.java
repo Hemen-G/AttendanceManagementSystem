@@ -2,112 +2,124 @@
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
- */
-package gui;
+ */package gui;
+
 import models.User;
 import models.Student;
 import dao.StudentDAO;
+import dao.UserDAO; // Import UserDAO to link students to users
+import java.sql.SQLException;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.util.List;
-/**
- *
- * @author HG
- */
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class StudentManagementForm extends javax.swing.JFrame {
- private User currentUser;
+    private User currentUser;
     private StudentDAO studentDAO;
+    private UserDAO userDAO; // Added UserDAO
     private Student selectedStudent;
-    
-    // Add this method to set current user
+
     public void setCurrentUser(User user) {
         this.currentUser = user;
         initializeData();
     }
-    
-    // Add this method to initialize data
+
     private void initializeData() {
         studentDAO = new StudentDAO();
+        userDAO = new UserDAO(); // Initialize UserDAO
         setupTable();
         loadStudents();
-        
-        // Add table selection listener
+
         jTable1.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 loadSelectedStudent();
             }
         });
     }
-    
+
     private void setupTable() {
-        String[] columnNames = {"Student ID", "Name", "Course", "Year", "Section"};
+        String[] columnNames = {"Student ID", "Name", "Course", "Year", "Section", "User ID", "Teacher ID"}; // Added User ID and Teacher ID columns
         DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; // Make table non-editable
+                return false;
             }
         };
         jTable1.setModel(model);
         jTable1.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
     }
-    
+
     private void loadStudents() {
         try {
             DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
-            model.setRowCount(0); // Clear existing data
-            
-            List<Student> students = studentDAO.getAllStudents();
-            System.out.println("Loading " + students.size() + " students"); // Debug
-            
+            model.setRowCount(0);
+
+            // Load students managed by the current teacher
+            List<Student> students = studentDAO.getAllStudents(currentUser.getId());
+
             for (Student student : students) {
                 Object[] row = {
                     student.getStudentId(),
                     student.getName(),
                     student.getCourse(),
                     student.getYear(),
-                    student.getSection()
+                    student.getSection(),
+                    student.getUserId() > 0 ? student.getUserId() : null, // Display null if 0
+                    student.getTeacherId() > 0 ? student.getTeacherId() : null // Display null if 0
                 };
                 model.addRow(row);
             }
         } catch (Exception e) {
             System.err.println("Error loading students: " + e.getMessage());
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, 
-                "Error loading students: " + e.getMessage(),
-                "Database Error", 
-                JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                                         "Error loading students: " + e.getMessage(),
+                                         "Database Error",
+                                         JOptionPane.ERROR_MESSAGE);
         }
-    }
-    
-    private void loadSelectedStudent() {
-    int selectedRow = jTable1.getSelectedRow();
-    if (selectedRow >= 0) {
-        try {
-            DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
-            
-            String studentId = (String) model.getValueAt(selectedRow, 0);  // Changed to String
-            selectedStudent = studentDAO.getStudentById(studentId);
-            
-            if (selectedStudent != null) {
-                jTextField1.setText(selectedStudent.getStudentId());  // No need for String.valueOf
-                jTextField2.setText(selectedStudent.getName());
-                jTextField3.setText(selectedStudent.getCourse());
-                jTextField4.setText(String.valueOf(selectedStudent.getYear()));
-                jTextField5.setText(selectedStudent.getSection());
-            }
-        } catch (Exception e) {
-            System.err.println("Error loading selected student: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-}
-    
-    public StudentManagementForm() {
-        initComponents();
-        // Initialize DAO even if no user is set yet
-        studentDAO = new StudentDAO();
     }
 
+    private void loadSelectedStudent() {
+        int selectedRow = jTable1.getSelectedRow();
+        if (selectedRow >= 0) {
+            try {
+                DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+                String studentId = (String) model.getValueAt(selectedRow, 0);
+                selectedStudent = studentDAO.getStudentById(studentId);
+
+                if (selectedStudent != null) {
+                    jTextField1.setText(selectedStudent.getStudentId());
+                    jTextField2.setText(selectedStudent.getName());
+                    jTextField3.setText(selectedStudent.getCourse());
+                    jTextField4.setText(String.valueOf(selectedStudent.getYear()));
+                    jTextField5.setText(selectedStudent.getSection());
+                    // You might want to add fields for userId and teacherId if they are editable
+                }
+            } catch (Exception e) {
+                System.err.println("Error loading selected student: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public StudentManagementForm() {
+        initComponents();
+        setLocationRelativeTo(null); // Center the form
+        studentDAO = new StudentDAO();
+        userDAO = new UserDAO(); // Initialize UserDAO
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                try {
+                    goBackToDashboard();
+                } catch (SQLException ex) {
+                    Logger.getLogger(StudentManagementForm.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        });
+    }
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -381,107 +393,115 @@ public class StudentManagementForm extends javax.swing.JFrame {
         clearFields();
     }//GEN-LAST:event_jButton3ActionPerformed
 private void addStudent() {
-    System.out.println("Add Student button clicked");
-    
-    if (!validateInput()) {
-        System.out.println("Validation failed");
-        return;
-    }
-    
-    try {
-        String studentId = jTextField1.getText().trim();  // Changed to String
-        String name = jTextField2.getText().trim();
-        String course = jTextField3.getText().trim();
-        int year = Integer.parseInt(jTextField4.getText().trim());
-        String section = jTextField5.getText().trim();
-        
-        System.out.println("Creating student: " + studentId + ", " + name + ", " + course + ", " + year + ", " + section);
-        
-        Student student = new Student(studentId, name, course, year, section);
-        
-        System.out.println("Calling studentDAO.addStudent()");
-        boolean success = studentDAO.addStudent(student);
-        System.out.println("Add student result: " + success);
-        
-        if (success) {
-            JOptionPane.showMessageDialog(this, "Student added successfully!",
-                                         "Success", JOptionPane.INFORMATION_MESSAGE);
-            loadStudents();
-            clearFields();
-        } else {
-            JOptionPane.showMessageDialog(this, "Failed to add student! Student ID might already exist.",
-                                         "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    } catch (NumberFormatException e) {
-        System.err.println("Number format error: " + e.getMessage());
-        JOptionPane.showMessageDialog(this, "Year must be a valid number!",
-                                     "Input Error", JOptionPane.ERROR_MESSAGE);
-    } catch (Exception e) {
-        System.err.println("Error adding student: " + e.getMessage());
-        e.printStackTrace();
-        JOptionPane.showMessageDialog(this, "Error adding student: " + e.getMessage(),
-                                     "Error", JOptionPane.ERROR_MESSAGE);
-    }
-}
-
-    private void updateStudent() {
-        if (selectedStudent == null) {
-            JOptionPane.showMessageDialog(this, "Please select a student to update!", 
-                                        "Selection Error", JOptionPane.WARNING_MESSAGE);
+        if (!validateInput()) {
             return;
         }
 
-        if (!validateInput()) return;
-
         try {
+            String studentId = jTextField1.getText().trim();
+            String name = jTextField2.getText().trim();
+            String course = jTextField3.getText().trim();
+            int year = Integer.parseInt(jTextField4.getText().trim());
+            String section = jTextField5.getText().trim();
+
+            // Check if student ID already exists
+            if (studentDAO.getStudentById(studentId) != null) {
+                JOptionPane.showMessageDialog(this, "Student ID already exists!", "Input Error", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Create new student with current teacher's ID
+            Student student = new Student(studentId, name, course, year, section);
+            student.setTeacherId(currentUser.getId()); // Assign current teacher as manager
+
+            boolean success = studentDAO.addStudent(student);
+
+            if (success) {
+                JOptionPane.showMessageDialog(this, "Student added successfully!",
+                                             "Success", JOptionPane.INFORMATION_MESSAGE);
+                loadStudents();
+                clearFields();
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to add student! Check console for details.",
+                                             "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Year must be a valid number!",
+                                         "Input Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error adding student: " + e.getMessage(),
+                                         "Error", JOptionPane.ERROR_MESSAGE);
+            Logger.getLogger(StudentManagementForm.class.getName()).log(Level.SEVERE, "Error adding student", e);
+        }
+    }
+
+    private void updateStudent() {
+        if (selectedStudent == null) {
+            JOptionPane.showMessageDialog(this, "Please select a student to update!",
+                                         "Selection Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (!validateInput()) {
+            return;
+        }
+        try {
+            // Ensure the student ID is not changed during update
+            String originalStudentId = selectedStudent.getStudentId(); 
+            
             selectedStudent.setName(jTextField2.getText().trim());
             selectedStudent.setCourse(jTextField3.getText().trim());
             selectedStudent.setYear(Integer.parseInt(jTextField4.getText().trim()));
             selectedStudent.setSection(jTextField5.getText().trim());
-
-            if (studentDAO.updateStudent(selectedStudent)) {
-                JOptionPane.showMessageDialog(this, "Student updated successfully!", 
-                                            "Success", JOptionPane.INFORMATION_MESSAGE);
+            // Keep userId and teacherId as they were, or update if you add fields for them
+            
+            boolean success = studentDAO.updateStudent(selectedStudent);
+            
+            if (success) {
+                JOptionPane.showMessageDialog(this, "Student updated successfully!",
+                                             "Success", JOptionPane.INFORMATION_MESSAGE);
                 loadStudents();
                 clearFields();
             } else {
-                JOptionPane.showMessageDialog(this, "Failed to update student!", 
-                                            "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Failed to update student!",
+                                             "Error", JOptionPane.ERROR_MESSAGE);
             }
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Year must be a valid number!",
+                                         "Input Error", JOptionPane.ERROR_MESSAGE);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Error updating student: " + e.getMessage(), 
-                                        "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error updating student: " + e.getMessage(),
+                                         "Error", JOptionPane.ERROR_MESSAGE);
+            Logger.getLogger(StudentManagementForm.class.getName()).log(Level.SEVERE, "Error updating student", e);
         }
     }
 
     private void deleteStudent() {
         if (selectedStudent == null) {
-            JOptionPane.showMessageDialog(this, "Please select a student to delete!", 
-                                        "Selection Error", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Please select a student to delete!",
+                                         "Selection Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        int choice = JOptionPane.showConfirmDialog(this, 
-                "Are you sure you want to delete student: " + selectedStudent.getName() + "?", 
-                "Confirm Delete", 
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE);
-
+        int choice = JOptionPane.showConfirmDialog(this,
+                                                 "Are you sure you want to delete student: " + selectedStudent.getName() + "?",
+                                                 "Confirm Delete",
+                                                 JOptionPane.YES_NO_OPTION,
+                                                 JOptionPane.WARNING_MESSAGE);
         if (choice == JOptionPane.YES_OPTION) {
             try {
                 if (studentDAO.deleteStudent(selectedStudent.getStudentId())) {
-                    JOptionPane.showMessageDialog(this, "Student deleted successfully!", 
-                                                "Success", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Student deleted successfully!",
+                                                 "Success", JOptionPane.INFORMATION_MESSAGE);
                     loadStudents();
                     clearFields();
                     selectedStudent = null;
                 } else {
-                    JOptionPane.showMessageDialog(this, "Failed to delete student!", 
-                                                "Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Failed to delete student!",
+                                                 "Error", JOptionPane.ERROR_MESSAGE);
                 }
             } catch (Exception e) {
-                JOptionPane.showMessageDialog(this, "Error deleting student: " + e.getMessage(), 
-                                            "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Error deleting student: " + e.getMessage(),
+                                             "Error", JOptionPane.ERROR_MESSAGE);
+                Logger.getLogger(StudentManagementForm.class.getName()).log(Level.SEVERE, "Error deleting student", e);
             }
         }
     }
@@ -494,68 +514,44 @@ private void addStudent() {
         jTextField5.setText("");
         selectedStudent = null;
         jTable1.clearSelection();
+        jTextField1.setEditable(true); // Make student ID editable for new entry
     }
 
     private boolean validateInput() {
-    // Check if any field is empty
-    if (jTextField1.getText().trim().isEmpty() || 
-        jTextField2.getText().trim().isEmpty() || 
-        jTextField3.getText().trim().isEmpty() || 
-        jTextField4.getText().trim().isEmpty() || 
-        jTextField5.getText().trim().isEmpty()) {
-        
-        JOptionPane.showMessageDialog(this, "Please fill all fields!",
-                                     "Input Error", JOptionPane.WARNING_MESSAGE);
-        return false;
-    }
-    
+        if (jTextField1.getText().trim().isEmpty() ||
+            jTextField2.getText().trim().isEmpty() ||
+            jTextField3.getText().trim().isEmpty() ||
+            jTextField4.getText().trim().isEmpty() ||
+            jTextField5.getText().trim().isEmpty()) {
 
-        try {
-        int year = Integer.parseInt(jTextField4.getText().trim());
-        
-        if (year <= 0 || year > 10) {
-            JOptionPane.showMessageDialog(this, "Year must be between 1 and 10!",
+            JOptionPane.showMessageDialog(this, "Please fill all fields!",
                                          "Input Error", JOptionPane.WARNING_MESSAGE);
             return false;
         }
-        
-    } catch (NumberFormatException e) {
-        JOptionPane.showMessageDialog(this, "Year must be a valid number!",
-                                     "Input Error", JOptionPane.WARNING_MESSAGE);
-        return false;
-    }
-    
-    return true;
-}
 
-    // Add navigation back to dashboard
-    @Override
-    public void setDefaultCloseOperation(int operation) {
-        super.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        
-        addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                goBackToDashboard();
+        try {
+            int year = Integer.parseInt(jTextField4.getText().trim());
+            if (year <= 0 || year > 10) { // Assuming year is between 1 and 10
+                JOptionPane.showMessageDialog(this, "Year must be between 1 and 10!",
+                                             "Input Error", JOptionPane.WARNING_MESSAGE);
+                return false;
             }
-        });
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Year must be a valid number!",
+                                         "Input Error", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        return true;
     }
 
-    private void goBackToDashboard() {
-        this.setVisible(false);
-        AttendanceDashboard dashboard = new AttendanceDashboard();
+    private void goBackToDashboard() throws SQLException {
+        this.dispose();
+        TeacherDashboard dashboard = new TeacherDashboard();
         dashboard.setUserInfo(currentUser);
         dashboard.setVisible(true);
     }
-    /**
-     * @param args the command line arguments
-     */
+
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -563,24 +559,21 @@ private void addStudent() {
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(StudentManagementForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(StudentManagementForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(StudentManagementForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(StudentManagementForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
+            java.util.logging.Logger.getLogger(StudentManagementForm.class.getName()).log(Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-        /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new StudentManagementForm().setVisible(true);
+                // For testing, you might temporarily set a dummy user
+                // User dummyUser = new User(); dummyUser.setId(1); dummyUser.setUsername("testteacher"); dummyUser.setRole("Teacher");
+                // StudentManagementForm form = new StudentManagementForm();
+                // form.setCurrentUser(dummyUser);
+                // form.setVisible(true);
+                new LoginForm().setVisible(true); // Always start from login
             }
         });
     }
+
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;

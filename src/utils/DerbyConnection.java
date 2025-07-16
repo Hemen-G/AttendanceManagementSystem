@@ -147,17 +147,17 @@ public class DerbyConnection {
                 Statement stmt = conn.createStatement();
                 
                 // Test query with proper column names (no role)
-                ResultSet rs = stmt.executeQuery("SELECT id, username FROM users");
+                ResultSet rs = stmt.executeQuery("SELECT id, username, role FROM users"); // Added role
                 System.out.println("\n📋 Current users:");
                 while (rs.next()) {
-                    System.out.println("  - ID: " + rs.getInt("id") + ", Username: " + rs.getString("username"));
+                    System.out.println("  - ID: " + rs.getInt("id") + ", Username: " + rs.getString("username") + ", Role: " + rs.getString("role"));
                 }
                 
                 // Test students query
-                rs = stmt.executeQuery("SELECT student_id, name, course FROM students");
+                rs = stmt.executeQuery("SELECT student_id, name, course, user_id, teacher_id FROM students"); // Added user_id, teacher_id
                 System.out.println("\n📋 Current students:");
                 while (rs.next()) {
-                    System.out.println("  - " + rs.getInt("student_id") + ": " + rs.getString("name") + " (" + rs.getString("course") + ")");
+                    System.out.println("  - " + rs.getString("student_id") + ": " + rs.getString("name") + " (" + rs.getString("course") + "), User ID: " + rs.getInt("user_id") + ", Teacher ID: " + rs.getInt("teacher_id"));
                 }
                 
             } catch (SQLException e) {

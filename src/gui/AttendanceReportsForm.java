@@ -2,64 +2,65 @@
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
- */
-package gui;
+ */package gui;
 
 import javax.swing.JOptionPane;
 import models.User;
 import models.Student;
 import dao.StudentDAO;
 import dao.AttendanceDAO;
+import java.sql.SQLException;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/**
- *
- * @author HG
- */
 public class AttendanceReportsForm extends javax.swing.JFrame {
 
-    /**
-     * Creates new form AttendanceReportsForm
-     */
-     private User currentUser;
+    private User currentUser;
     private StudentDAO studentDAO;
     private AttendanceDAO attendanceDAO;
 
-    // Add this method to set current user
     public void setCurrentUser(User user) {
         this.currentUser = user;
         initializeData();
     }
 
-    // Add this method to initialize data
     private void initializeData() {
         studentDAO = new StudentDAO();
         attendanceDAO = new AttendanceDAO();
-        
+
         initializeComboBoxes();
         setupTable();
+        // Set default dates for date range report
+        LocalDate today = LocalDate.now();
+        jTextField1.setText(today.minusMonths(1).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+        jTextField2.setText(today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+        
+        // Initial state: disable student/course specific fields
+        jComboBox3.setEnabled(false);
+        jComboBox2.setEnabled(false);
+        jTextField1.setEnabled(false); // Start Date
+        jTextField2.setEnabled(false); // End Date
     }
 
     private void initializeComboBoxes() {
-        // Initialize Report Type combo box
         jComboBox1.removeAllItems();
         jComboBox1.addItem("Student Summary");
         jComboBox1.addItem("Course Summary");
         jComboBox1.addItem("Date Range Report");
 
-        // Initialize Course combo box
         jComboBox2.removeAllItems();
         List<String> courses = studentDAO.getAllCourses();
         for (String course : courses) {
             jComboBox2.addItem(course);
         }
 
-        // Initialize Student combo box
         jComboBox3.removeAllItems();
-        List<Student> students = studentDAO.getAllStudents();
+        // Load students managed by the current teacher
+        List<Student> students = studentDAO.getAllStudents(currentUser.getId());
         for (Student student : students) {
             jComboBox3.addItem(student.toString());
         }
@@ -67,11 +68,28 @@ public class AttendanceReportsForm extends javax.swing.JFrame {
 
     private void setupTable() {
         String[] columnNames = {"Student ID", "Student Name", "Course", "Total Days", "Present Days", "Attendance %"};
-        DefaultTableModel model = new DefaultTableModel(columnNames, 0);
+        DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // Make table read-only
+            }
+        };
         jTable2.setModel(model);
     }
+
     public AttendanceReportsForm() {
         initComponents();
+        setLocationRelativeTo(null); // Center the form
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                try {
+                    goBackToDashboard();
+                } catch (SQLException ex) {
+                    Logger.getLogger(AttendanceReportsForm.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        });
     }
 
     /**
@@ -274,17 +292,20 @@ public class AttendanceReportsForm extends javax.swing.JFrame {
 
         // TODO add your handling code here:
        String reportType = (String) jComboBox1.getSelectedItem();
-        
+
         // Enable/disable controls based on report type
+        jComboBox3.setEnabled(false); // Student dropdown
+        jComboBox2.setEnabled(false); // Course dropdown
+        jTextField1.setEnabled(false); // From Date
+        jTextField2.setEnabled(false); // To Date
+
         if ("Student Summary".equals(reportType)) {
             jComboBox3.setEnabled(true);
-            jComboBox2.setEnabled(false);
         } else if ("Course Summary".equals(reportType)) {
-            jComboBox3.setEnabled(false);
             jComboBox2.setEnabled(true);
-        } else {
-            jComboBox3.setEnabled(false);
-            jComboBox2.setEnabled(false);
+        } else if ("Date Range Report".equals(reportType)) {
+            jTextField1.setEnabled(true);
+            jTextField2.setEnabled(true);
         }
 
     }//GEN-LAST:event_jComboBox1ActionPerformed
@@ -298,7 +319,6 @@ private void generateReport() {
         String reportType = (String) jComboBox1.getSelectedItem();
         DefaultTableModel model = (DefaultTableModel) jTable2.getModel();
         model.setRowCount(0); // Clear existing data
-
         try {
             if ("Student Summary".equals(reportType)) {
                 generateStudentSummaryReport(model);
@@ -308,21 +328,23 @@ private void generateReport() {
                 generateDateRangeReport(model);
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Error generating report: " + e.getMessage(), 
-                                        "Report Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error generating report: " + e.getMessage(),
+                                         "Report Error", JOptionPane.ERROR_MESSAGE);
+            Logger.getLogger(AttendanceReportsForm.class.getName()).log(Level.SEVERE, "Error generating report", e);
         }
-}
- private void generateStudentSummaryReport(DefaultTableModel model) {
-        List<Student> students = studentDAO.getAllStudents();
-        
+    }
+
+    private void generateStudentSummaryReport(DefaultTableModel model) {
+        // Filter students by the current teacher
+        List<Student> students = studentDAO.getAllStudents(currentUser.getId());
+
         for (Student student : students) {
-            double attendancePercentage = attendanceDAO.getAttendancePercentage(student.getStudentId());
-            
-            // Calculate total and present days (simplified)
-            List<models.Attendance> studentAttendance = attendanceDAO.getAttendanceByStudent(student.getStudentId());
+            double attendancePercentage = attendanceDAO.getAttendancePercentage(student.getStudentId(), currentUser.getId());
+
+            List<models.Attendance> studentAttendance = attendanceDAO.getAttendanceByStudent(student.getStudentId(), currentUser.getId());
             int totalDays = studentAttendance.size();
             int presentDays = (int) (totalDays * attendancePercentage / 100);
-            
+
             Object[] row = {
                 student.getStudentId(),
                 student.getName(),
@@ -337,18 +359,21 @@ private void generateReport() {
 
     private void generateCourseSummaryReport(DefaultTableModel model) {
         String selectedCourse = (String) jComboBox2.getSelectedItem();
-        if (selectedCourse == null) return;
+        if (selectedCourse == null) {
+            JOptionPane.showMessageDialog(this, "Please select a course!", "Input Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        // Filter students by the current teacher and selected course
+        List<Student> students = studentDAO.getAllStudents(currentUser.getId());
 
-        List<Student> students = studentDAO.getAllStudents();
-        
         for (Student student : students) {
             if (student.getCourse().equals(selectedCourse)) {
-                double attendancePercentage = attendanceDAO.getAttendancePercentage(student.getStudentId());
-                
-                List<models.Attendance> studentAttendance = attendanceDAO.getAttendanceByStudent(student.getStudentId());
+                double attendancePercentage = attendanceDAO.getAttendancePercentage(student.getStudentId(), currentUser.getId());
+
+                List<models.Attendance> studentAttendance = attendanceDAO.getAttendanceByStudent(student.getStudentId(), currentUser.getId());
                 int totalDays = studentAttendance.size();
                 int presentDays = (int) (totalDays * attendancePercentage / 100);
-                
+
                 Object[] row = {
                     student.getStudentId(),
                     student.getName(),
@@ -365,34 +390,56 @@ private void generateReport() {
     private void generateDateRangeReport(DefaultTableModel model) {
         String startDateStr = jTextField1.getText().trim();
         String endDateStr = jTextField2.getText().trim();
-        
+
         if (startDateStr.isEmpty() || endDateStr.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please enter both start and end dates!", 
-                                        "Input Error", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Please enter both start and end dates!",
+                                         "Input Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        LocalDate startDate;
+        LocalDate endDate;
+        try {
+            startDate = LocalDate.parse(startDateStr);
+            endDate = LocalDate.parse(endDateStr);
+        } catch (java.time.format.DateTimeParseException e) {
+            JOptionPane.showMessageDialog(this, "Invalid date format! Use YYYY-MM-DD", "Date Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        LocalDate startDate = LocalDate.parse(startDateStr);
-        LocalDate endDate = LocalDate.parse(endDateStr);
-        
-        List<models.Attendance> attendanceList = attendanceDAO.getAttendanceByDateRange(startDate, endDate);
-        
+        if (startDate.isAfter(endDate)) {
+            JOptionPane.showMessageDialog(this, "Start date must be before or equal to end date!", "Date Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // Get attendance for the date range, filtered by the current teacher's students
+        List<models.Attendance> attendanceList = attendanceDAO.getAttendanceByDateRange(startDate, endDate, currentUser.getId());
+
         // Group by student and calculate statistics
-        List<Student> students = studentDAO.getAllStudents();
-        for (Student student : students) {
-            int totalDays = 0;
-            int presentDays = 0;
+        List<Student> studentsManagedByTeacher = studentDAO.getAllStudents(currentUser.getId());
+        
+        // Use a map to store aggregated data for each student
+        java.util.Map<String, int[]> studentStats = new java.util.HashMap<>(); // studentId -> [totalDays, presentDays]
+
+        for (models.Attendance attendance : attendanceList) {
+            // Ensure the attendance record belongs to a student managed by the current teacher
+            boolean isManagedStudent = studentsManagedByTeacher.stream()
+                                        .anyMatch(s -> s.getStudentId().equals(attendance.getStudentId()));
             
-            for (models.Attendance attendance : attendanceList) {
-                if (attendance.getStudentId() == student.getStudentId()) {
-                    totalDays++;
-                    if ("Present".equals(attendance.getStatus())) {
-                        presentDays++;
-                    }
+            if (isManagedStudent) {
+                int[] stats = studentStats.getOrDefault(attendance.getStudentId(), new int[]{0, 0});
+                stats[0]++; // Increment total days
+                if ("Present".equals(attendance.getStatus())) {
+                    stats[1]++; // Increment present days
                 }
+                studentStats.put(attendance.getStudentId(), stats);
             }
-            
-            if (totalDays > 0) {
+        }
+
+        for (Student student : studentsManagedByTeacher) {
+            int[] stats = studentStats.get(student.getStudentId());
+            if (stats != null && stats[0] > 0) {
+                int totalDays = stats[0];
+                int presentDays = stats[1];
                 double percentage = (double) presentDays / totalDays * 100;
                 Object[] row = {
                     student.getStudentId(),
@@ -407,35 +454,14 @@ private void generateReport() {
         }
     }
 
-    // Add navigation back to dashboard
-    @Override
-    public void setDefaultCloseOperation(int operation) {
-        super.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        
-        addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                goBackToDashboard();
-            }
-        });
-    }
-
-    private void goBackToDashboard() {
-        this.setVisible(false);
-        AttendanceDashboard dashboard = new AttendanceDashboard();
+    private void goBackToDashboard() throws SQLException {
+        this.dispose();
+        TeacherDashboard dashboard = new TeacherDashboard();
         dashboard.setUserInfo(currentUser);
         dashboard.setVisible(true);
     }
 
-    /**
-     * @param args the command line arguments
-     */
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -443,25 +469,20 @@ private void generateReport() {
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(AttendanceReportsForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(AttendanceReportsForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(AttendanceReportsForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(AttendanceReportsForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
+            java.util.logging.Logger.getLogger(AttendanceReportsForm.class.getName()).log(Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-        /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new AttendanceReportsForm().setVisible(true);
+                // For testing, you might temporarily set a dummy user
+                // User dummyUser = new User(); dummyUser.setId(1); dummyUser.setUsername("testteacher"); dummyUser.setRole("Teacher");
+                // AttendanceReportsForm form = new AttendanceReportsForm();
+                // form.setCurrentUser(dummyUser);
+                // form.setVisible(true);
+                new LoginForm().setVisible(true); // Always start from login
             }
         });
     }
-
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JComboBox<String> jComboBox1;

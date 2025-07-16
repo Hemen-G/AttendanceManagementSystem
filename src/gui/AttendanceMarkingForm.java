@@ -2,72 +2,80 @@
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
- */
-package gui;
+ */package gui;
+
 import models.User;
 import models.Student;
 import dao.StudentDAO;
 import dao.AttendanceDAO;
 import javax.swing.*;
 import java.awt.*;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 /**
  *
  * @author HG
  */
 public class AttendanceMarkingForm extends javax.swing.JFrame {
-    private User currentUser;
+   private User currentUser;
     private List<Student> students;
     private List<JCheckBox> attendanceCheckBoxes;
     private StudentDAO studentDAO;
     private AttendanceDAO attendanceDAO;
-    /**
-     * Creates new form AttendanceMarkingForm
-     */
+
     public AttendanceMarkingForm() {
         initComponents();
-         
+        setLocationRelativeTo(null); // Center the form
     }
-    // Add this method to set current user
+
     public void setCurrentUser(User user) {
         this.currentUser = user;
         initializeData();
     }
 
-    // Add this method to initialize data
     private void initializeData() {
         studentDAO = new StudentDAO();
         attendanceDAO = new AttendanceDAO();
-        
+
         // Set current date
         LocalDate today = LocalDate.now();
         jTextField1.setText(today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-        
+
         loadStudents();
     }
 
-    // Add this method to load students
     private void loadStudents() {
-        students = studentDAO.getAllStudents();
-        attendanceCheckBoxes = new ArrayList<>();
+        // Load students managed by the current teacher
+        if (currentUser != null && "Teacher".equals(currentUser.getRole())) {
+            students = studentDAO.getAllStudents(currentUser.getId());
+        } else {
+            // Fallback or error if not a teacher or no user
+            students = new ArrayList<>();
+            JOptionPane.showMessageDialog(this, "Only teachers can mark attendance. No students loaded.", "Authorization Error", JOptionPane.ERROR_MESSAGE);
+        }
         
-        // Clear the panel
+        attendanceCheckBoxes = new ArrayList<>();
+
         pnlStudents.removeAll();
         pnlStudents.setLayout(new GridLayout(0, 1, 5, 5));
-        
-        // Add checkboxes for each student
+
         for (Student student : students) {
             JCheckBox checkBox = new JCheckBox(student.toString());
             checkBox.setSelected(true); // Default to present
             attendanceCheckBoxes.add(checkBox);
             pnlStudents.add(checkBox);
         }
-        
+
         pnlStudents.revalidate();
         pnlStudents.repaint();
+        
+        // Automatically load attendance for today's date after loading students
+        jButton1ActionPerformed(null); 
     }
 
     /**
@@ -249,7 +257,7 @@ public class AttendanceMarkingForm extends javax.swing.JFrame {
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // TODO add your handling code here:
-        if (attendanceCheckBoxes != null) {
+if (attendanceCheckBoxes != null) {
             for (JCheckBox checkBox : attendanceCheckBoxes) {
                 checkBox.setSelected(true);
             }
@@ -264,7 +272,7 @@ public class AttendanceMarkingForm extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Please enter a date!", "Input Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
+
         try {
             LocalDate date = LocalDate.parse(dateStr);
             loadAttendanceForDate(date);
@@ -275,7 +283,7 @@ public class AttendanceMarkingForm extends javax.swing.JFrame {
 
     private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
         // TODO add your handling code here:
-        if (attendanceCheckBoxes != null) {
+if (attendanceCheckBoxes != null) {
             for (JCheckBox checkBox : attendanceCheckBoxes) {
                 checkBox.setSelected(false);
             }
@@ -292,100 +300,86 @@ public class AttendanceMarkingForm extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Please wait for data to load!", "Loading", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        
-        // Load existing attendance for the date and update checkboxes
-        List<models.Attendance> existingAttendance = attendanceDAO.getAttendanceByDate(date);
-        
+
+        // Load existing attendance for the date and update checkboxes, filtered by teacher
+        List<models.Attendance> existingAttendance = attendanceDAO.getAttendanceByDate(date, currentUser.getId());
+
+        // Create a map for quick lookup of attendance status by studentId
+        java.util.Map<String, String> attendanceMap = existingAttendance.stream()
+            .collect(java.util.stream.Collectors.toMap(models.Attendance::getStudentId, models.Attendance::getStatus));
+
         // Reset all checkboxes to present (default)
         for (JCheckBox checkBox : attendanceCheckBoxes) {
             checkBox.setSelected(true);
         }
-        
+
         // Update checkboxes based on existing attendance
-        for (models.Attendance attendance : existingAttendance) {
-            for (int i = 0; i < students.size(); i++) {
-                if (students.get(i).getStudentId() == attendance.getStudentId()) {
-                    attendanceCheckBoxes.get(i).setSelected("Present".equals(attendance.getStatus()));
-                    break;
-                }
+        for (int i = 0; i < students.size(); i++) {
+            Student student = students.get(i);
+            String status = attendanceMap.get(student.getStudentId());
+            if (status != null) {
+                attendanceCheckBoxes.get(i).setSelected("Present".equals(status));
             }
         }
-            JOptionPane.showMessageDialog(this, "Attendance loaded for " + date, "Success", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this, "Attendance loaded for " + date, "Success", JOptionPane.INFORMATION_MESSAGE);
     }
-     private void saveAttendance() {
+
+    private void saveAttendance() {
         if (attendanceDAO == null || students == null || attendanceCheckBoxes == null) {
             JOptionPane.showMessageDialog(this, "Please wait for data to load!", "Loading", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        
+
         String dateStr = jTextField1.getText().trim();
         if (dateStr.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please enter a date!", "Input Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
+
         try {
             LocalDate date = LocalDate.parse(dateStr);
             boolean success = true;
             int savedCount = 0;
-            
+
             for (int i = 0; i < students.size(); i++) {
                 Student student = students.get(i);
                 boolean isPresent = attendanceCheckBoxes.get(i).isSelected();
                 String status = isPresent ? "Present" : "Absent";
-                
-                if (attendanceDAO.markAttendance(student.getStudentId(), date, status)) {
+
+                // Pass the current user's ID as recordedBy
+                if (attendanceDAO.markAttendance(student.getStudentId(), date, status, currentUser.getId())) {
                     savedCount++;
                 } else {
                     success = false;
                 }
             }
-            
+
             if (success) {
-                JOptionPane.showMessageDialog(this, 
-                    "Attendance saved successfully for " + savedCount + " students!", 
-                    "Success", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                                             "Attendance saved successfully for " + savedCount + " students!",
+                                             "Success", JOptionPane.INFORMATION_MESSAGE);
             } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Saved " + savedCount + " records, but some failed to save!", 
-                    "Partial Success", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                                             "Saved " + savedCount + " records, but some failed to save!",
+                                             "Partial Success", JOptionPane.WARNING_MESSAGE);
             }
-            
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, 
-                "Error saving attendance: " + e.getMessage(), 
-                "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                                         "Error saving attendance: " + e.getMessage(),
+                                         "Error", JOptionPane.ERROR_MESSAGE);
+            Logger.getLogger(AttendanceMarkingForm.class.getName()).log(Level.SEVERE, "Error saving attendance", e);
         }
     }
-      // Add navigation back to dashboard
-    @Override
-    public void setDefaultCloseOperation(int operation) {
-        super.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        
-        addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                goBackToDashboard();
-            }
-        });
-    }
 
-    private void goBackToDashboard() {
-        this.setVisible(false);
-        AttendanceDashboard dashboard = new AttendanceDashboard();
+    private void goBackToDashboard() throws SQLException {
+        this.dispose();
+        TeacherDashboard dashboard = new TeacherDashboard();
         dashboard.setUserInfo(currentUser);
         dashboard.setVisible(true);
     }
 
-    /**
-     * @param args the command line arguments
-     */
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -393,36 +387,17 @@ public class AttendanceMarkingForm extends javax.swing.JFrame {
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
             java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
-        //</editor-fold>
- try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(AttendanceMarkingForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new AttendanceMarkingForm().setVisible(true);
+                // For testing, you might temporarily set a dummy user
+                // User dummyUser = new User(); dummyUser.setId(1); dummyUser.setUsername("testteacher"); dummyUser.setRole("Teacher");
+                // AttendanceMarkingForm form = new AttendanceMarkingForm();
+                // form.setCurrentUser(dummyUser);
+                // form.setVisible(true);
+                new LoginForm().setVisible(true); // Always start from login
             }
         });
     }

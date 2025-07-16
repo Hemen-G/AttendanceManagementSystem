@@ -2,31 +2,28 @@
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
- */
-package gui;
-// Add these imports to your existing Signup.java (at the top)
+ */package gui;
+
 import dao.UserDAO;
 import models.User;
 import utils.DerbyConnection;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import javax.swing.JOptionPane;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
  * @author HG
  */
 public class Signup extends javax.swing.JFrame {
-     private UserDAO userDAO;
-    
-    /**
-     * Creates new form Signup
-     */
+    private UserDAO userDAO;
+
     public Signup() {
         initComponents();
-         userDAO = new UserDAO();
-        
+        userDAO = new UserDAO();
+        setLocationRelativeTo(null); // Center the form
     }
     /**
      * This method is called from within the constructor to initialize the form.
@@ -217,149 +214,119 @@ public class Signup extends javax.swing.JFrame {
     /**
      * @param args the command line arguments
      */
-    private void performSignup() {
-        
+   private void performSignup() {
         String username = jTextField1.getText().trim();
-    String password = jTextField2.getText().trim();
-    String confirmPassword = jTextField3.getText().trim();
-    String role = (String) roleComboBox.getSelectedItem();
+        String password = new String(jTextField2.getText()).trim(); // Get password from JPasswordField
+        String confirmPassword = new String(jTextField3.getText()).trim(); // Get password from JPasswordField
+        String role = (String) roleComboBox.getSelectedItem();
+
         // Input validation
         if (username.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
-            JOptionPane.showMessageDialog(this, 
-                "Please fill all fields!", 
-                "Input Error", 
-                JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                                         "Please fill all fields!",
+                                         "Input Error",
+                                         JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
+
         if (username.length() < 3) {
-            JOptionPane.showMessageDialog(this, 
-                "Username must be at least 3 characters long!", 
-                "Input Error", 
-                JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                                         "Username must be at least 3 characters long!",
+                                         "Input Error",
+                                         JOptionPane.WARNING_MESSAGE);
             jTextField1.requestFocus();
             jTextField1.selectAll();
             return;
         }
-        
+
         if (password.length() < 4) {
-            JOptionPane.showMessageDialog(this, 
-                "Password must be at least 4 characters long!", 
-                "Input Error", 
-                JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                                         "Password must be at least 4 characters long!",
+                                         "Input Error",
+                                         JOptionPane.WARNING_MESSAGE);
             jTextField2.requestFocus();
             jTextField2.selectAll();
             return;
         }
-        
+
         if (!password.equals(confirmPassword)) {
-            JOptionPane.showMessageDialog(this, 
-                "Passwords do not match!", 
-                "Password Error", 
-                JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                                         "Passwords do not match!",
+                                         "Password Error",
+                                         JOptionPane.WARNING_MESSAGE);
             jTextField2.setText("");
             jTextField3.setText("");
             jTextField2.requestFocus();
             return;
         }
-        
+
         try {
-            // Test database connection first
             if (!DerbyConnection.testConnection()) {
-                JOptionPane.showMessageDialog(this, 
-                    "Cannot connect to database!\n" +
-                    "Please ensure Derby server is running and try again.", 
-                    "Database Connection Error", 
-                    JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                                             "Cannot connect to database!\n" +
+                                             "Please ensure Derby server is running and try again.",
+                                             "Database Connection Error",
+                                             JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            
-            // Check if username exists
-            if (userDAO.usernameExists(username)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Username '" + username + "' already exists!\n" +
-                    "Please choose a different username.", 
-                    "Username Error", 
-                    JOptionPane.WARNING_MESSAGE);
-                jTextField1.requestFocus();
-                jTextField1.selectAll();
-                return;
-            }
-            
-            // Create new user
-         User newUser = new User();
-    newUser.setUsername(username);
-    newUser.setPassword(password);
-    newUser.setRole(role);
-            
-            
-            // Add user to database
-            if (userDAO.addUser(newUser)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Registration successful!\n" +
-                    "Username: " + username + "\n" +
-                    
-                    "You can now login with your credentials.", 
-                    "Registration Success", 
-                    JOptionPane.INFORMATION_MESSAGE);
-                
-                // Clear fields and switch to login
+
+            User newUser = new User();
+            newUser.setUsername(username);
+            newUser.setPassword(password);
+            newUser.setRole(role);
+
+            int generatedId = userDAO.addUser(newUser); // Get the generated ID
+
+            if (generatedId != -1) { // Check if user was added successfully
+                JOptionPane.showMessageDialog(this,
+                                             "Registration successful!\n" +
+                                             "Username: " + username + "\n" +
+                                             "You can now login with your credentials.",
+                                             "Registration Success",
+                                             JOptionPane.INFORMATION_MESSAGE);
+
                 clearFields();
                 switchToLogin();
-                
             } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Registration failed!\n" +
-                    "This could be due to:\n" +
-                    "• Username already exists\n" +
-                    "• Database connection issues\n" +
-                    "• Invalid input data\n\n" +
-                    "Please try again with different credentials.", 
-                    "Registration Error", 
-                    JOptionPane.ERROR_MESSAGE);
+                // This branch is now primarily for username already exists, as addUser handles it
+                JOptionPane.showMessageDialog(this,
+                                             "Registration failed! Username might already exist or another error occurred.",
+                                             "Registration Error",
+                                             JOptionPane.ERROR_MESSAGE);
             }
-            
+
         } catch (Exception e) {
-            // Log the actual error for debugging
             System.err.println("Signup error details:");
             System.err.println("  Username: " + username);
             System.err.println("  Error: " + e.getMessage());
             e.printStackTrace();
-            
-            JOptionPane.showMessageDialog(this, 
-                "Database error occurred during registration.\n\n" +
-                "Error details: " + e.getMessage() + "\n\n" +
-                "Please check:\n" +
-                "• Derby server is running\n" +
-                "• Database connection is working\n" +
-                "• Check console for detailed error information", 
-                "Database Error", 
-                JOptionPane.ERROR_MESSAGE);
+
+            JOptionPane.showMessageDialog(this,
+                                         "Database error occurred during registration.\n\n" +
+                                         "Error details: " + e.getMessage() + "\n\n" +
+                                         "Please check:\n" +
+                                         "• Derby server is running\n" +
+                                         "• Database connection is working\n" +
+                                         "• Check console for detailed error information",
+                                         "Database Error",
+                                         JOptionPane.ERROR_MESSAGE);
         }
     }
-    
+
     private void clearFields() {
         jTextField1.setText("");
         jTextField2.setText("");
         jTextField3.setText("");
+        roleComboBox.setSelectedIndex(0); // Reset role combo box
     }
-    
+
     private void switchToLogin() {
         this.setVisible(false);
         new LoginForm().setVisible(true);
         this.dispose();
     }
 
-    /**
-     * @param args the command line arguments
-     */
- 
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -367,44 +334,15 @@ public class Signup extends javax.swing.JFrame {
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
+            java.util.logging.Logger.getLogger(Signup.class.getName()).log(Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-        /* Create and display the form */
-       try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(Signup.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        //</editor-fold>
-
-        /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
                 new Signup().setVisible(true);
             }
         });
     }
-
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;

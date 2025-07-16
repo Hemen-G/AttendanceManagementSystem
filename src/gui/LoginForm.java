@@ -2,11 +2,15 @@
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
- */
-package gui;
+ */package gui;
+
 import dao.UserDAO;
+import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import models.User;
 import javax.swing.JOptionPane;
+import utils.SessionManager;
 
 /**
  *
@@ -17,10 +21,10 @@ public class LoginForm extends javax.swing.JFrame {
     /**
      * Creates new form LoginForm
      */
-    public LoginForm() {
+   public LoginForm() {
         initComponents();
+        setLocationRelativeTo(null); // Center the form
     }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -157,56 +161,61 @@ public class LoginForm extends javax.swing.JFrame {
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         // TODO add your handling code here:
-        String username = jTextField1.getText().trim();
-    String password = jTextField2.getText().trim();
-    
-    if (username.isEmpty() || password.isEmpty()) {
-        JOptionPane.showMessageDialog(this, "Please enter both username and password!", 
-                                    "Input Error", JOptionPane.WARNING_MESSAGE);
-        return;
-    }
-    
-    UserDAO userDAO = new UserDAO();
-    User user = userDAO.authenticate(username, password);
-    
-    if (user != null) {
-        JOptionPane.showMessageDialog(this, "Login successful! Welcome " + user.getUsername(), 
-                                    "Success", JOptionPane.INFORMATION_MESSAGE);
-        
-        this.setVisible(false);
-        
-        if ("Teacher".equals(user.getRole())) {
-            AttendanceDashboard dashboard = new AttendanceDashboard();
-            dashboard.setUserInfo(user);
-            dashboard.setVisible(true);
-        } else {
-            StudentDashboard dashboard = new StudentDashboard();
-            dashboard.setCurrentUser(user);
-            dashboard.setVisible(true);
+       String username = jTextField1.getText().trim();
+        String password = new String(jTextField2.getText()).trim(); // Get password from JPasswordField
+
+        if (username.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter both username and password!",
+                                         "Input Error", JOptionPane.WARNING_MESSAGE);
+            return;
         }
-    } else {
-        JOptionPane.showMessageDialog(this, "Invalid username or password!", 
-                                    "Login Failed", JOptionPane.ERROR_MESSAGE);
-        jTextField2.setText("");
-        jTextField1.requestFocus();
-    }
+
+        UserDAO userDAO = new UserDAO();
+        User user = userDAO.authenticate(username, password);
+
+        if (user != null) {
+            JOptionPane.showMessageDialog(this, "Login successful! Welcome " + user.getUsername(),
+                                         "Success", JOptionPane.INFORMATION_MESSAGE);
+            
+            this.setVisible(false); // Hide login form
+            SessionManager.setCurrentUser(user); // Set current user in session
+
+            try {
+                if ("Teacher".equals(user.getRole())) {
+                    TeacherDashboard dashboard = new TeacherDashboard();
+                    dashboard.setUserInfo(user); // Pass user info before making visible
+                    dashboard.setVisible(true);
+                } else if ("Student".equals(user.getRole())) { // Assuming "Student" is the role for students
+                    StudentDashboard dashboard = new StudentDashboard();
+                    dashboard.setCurrentUser(user); // Pass user info before making visible
+                    dashboard.setVisible(true);
+                } else {
+                    JOptionPane.showMessageDialog(this, "Unknown user role: " + user.getRole(), "Error", JOptionPane.ERROR_MESSAGE);
+                    new WelcomeDashboard().setVisible(true); // Go back to welcome if role is unknown
+                }
+            } catch (SQLException ex) {
+                Logger.getLogger(LoginForm.class.getName()).log(Level.SEVERE, null, ex);
+                JOptionPane.showMessageDialog(this, "Error loading dashboard: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                new WelcomeDashboard().setVisible(true); // Go back to welcome on error
+            }
+            this.dispose(); // Dispose login form after successful redirection
+        } else {
+            JOptionPane.showMessageDialog(this, "Invalid credentials", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // TODO add your handling code here:
          this.setVisible(false);
-    new Signup().setVisible(true);
+        new Signup().setVisible(true);
+        this.dispose(); // Dispose login form when going to signup
     }//GEN-LAST:event_jButton2ActionPerformed
 
     /**
      * @param args the command line arguments
      */
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -214,18 +223,9 @@ public class LoginForm extends javax.swing.JFrame {
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(LoginForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(LoginForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(LoginForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
             java.util.logging.Logger.getLogger(LoginForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-        /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
                 new LoginForm().setVisible(true);

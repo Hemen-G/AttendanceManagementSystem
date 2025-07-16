@@ -4,81 +4,89 @@
  * and open the template in the editor.
  */
 package gui;
+
 import models.User;
 import models.Student;
 import models.Attendance;
 import dao.StudentDAO;
 import dao.AttendanceDAO;
+import java.sql.SQLException;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.time.LocalDate;
 import java.util.List;
-/**
- *
- * @author HG
- */
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class AttendanceViewForm extends javax.swing.JFrame {
- private User currentUser;
+    private User currentUser;
     private StudentDAO studentDAO;
     private AttendanceDAO attendanceDAO;
-    private List<Student> allStudents;
-     public void setCurrentUser(User user) {
+    private List<Student> allStudentsManagedByTeacher; // Students managed by the current teacher
+
+    public void setCurrentUser(User user) {
         this.currentUser = user;
         initializeData();
     }
-     
-     
-     private void initializeData() {
+
+    private void initializeData() {
         try {
             studentDAO = new StudentDAO();
             attendanceDAO = new AttendanceDAO();
-            
-            // Initialize combo boxes
+
+            // Load students managed by the current teacher
+            if (currentUser != null && "Teacher".equals(currentUser.getRole())) {
+                allStudentsManagedByTeacher = studentDAO.getAllStudents(currentUser.getId());
+            } else {
+                allStudentsManagedByTeacher = new java.util.ArrayList<>(); // Empty list if not a teacher
+                JOptionPane.showMessageDialog(this, "Only teachers can view attendance records.", "Authorization Error", JOptionPane.ERROR_MESSAGE);
+            }
+
             initializeComboBoxes();
-            
-            // Set up table
             setupTable();
-            
+
             // Set default dates
             LocalDate today = LocalDate.now();
-            jTextField1.setText(today.toString());
-            jTextField2.setText(today.minusDays(7).toString());
-            jTextField4.setText(today.toString());
-            
+            jTextField1.setText(today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)); // For "By Date"
+            jTextField2.setText(today.minusDays(7).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)); // For "Date Range From"
+            jTextField4.setText(today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)); // For "Date Range To"
+
+            // Set initial state of fields based on default "All Records" view type
+            jComboBox2.setEnabled(false);
+            jTextField1.setEnabled(false);
+            jTextField2.setEnabled(false);
+            jTextField4.setEnabled(false);
+
         } catch (Exception e) {
             System.err.println("Error initializing data: " + e.getMessage());
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, 
-                "Error initializing form: " + e.getMessage(),
-                "Initialization Error", 
-                JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                                         "Error initializing form: " + e.getMessage(),
+                                         "Initialization Error",
+                                         JOptionPane.ERROR_MESSAGE);
         }
     }
-      private void initializeComboBoxes() {
+
+    private void initializeComboBoxes() {
         try {
-            // Initialize View Type combo box
             jComboBox1.removeAllItems();
             jComboBox1.addItem("All Records");
             jComboBox1.addItem("By Student");
             jComboBox1.addItem("By Date");
             jComboBox1.addItem("By Date Range");
-            
-            // Initialize Student combo box
+
             jComboBox2.removeAllItems();
             jComboBox2.addItem("Select Student"); // Add default option
-            allStudents = studentDAO.getAllStudents();
-            for (Student student : allStudents) {
+            for (Student student : allStudentsManagedByTeacher) {
                 jComboBox2.addItem(student.getStudentId() + " - " + student.getName());
             }
-            
-            System.out.println("Loaded " + allStudents.size() + " students for viewing");
-            
         } catch (Exception e) {
             System.err.println("Error initializing combo boxes: " + e.getMessage());
             e.printStackTrace();
         }
     }
-       private void setupTable() {
+
+    private void setupTable() {
         String[] columnNames = {"Student ID", "Student Name", "Date", "Status"};
         DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
             @Override
@@ -87,20 +95,28 @@ public class AttendanceViewForm extends javax.swing.JFrame {
             }
         };
         jTable1.setModel(model);
-        
+
         // Set column widths
         jTable1.getColumnModel().getColumn(0).setPreferredWidth(100);
         jTable1.getColumnModel().getColumn(1).setPreferredWidth(200);
         jTable1.getColumnModel().getColumn(2).setPreferredWidth(100);
         jTable1.getColumnModel().getColumn(3).setPreferredWidth(80);
     }
-    /**
-     * Creates new form AttendanceViewForm
-     */
+
     public AttendanceViewForm() {
         initComponents();
+        setLocationRelativeTo(null); // Center the form
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                try {
+                    goBackToDashboard();
+                } catch (SQLException ex) {
+                    Logger.getLogger(AttendanceViewForm.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        });
     }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -302,29 +318,21 @@ public class AttendanceViewForm extends javax.swing.JFrame {
 
     private void jComboBox1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jComboBox1ActionPerformed
         // TODO add your handling code here:
-         String selectedType = (String) jComboBox1.getSelectedItem();
-        
+ String selectedType = (String) jComboBox1.getSelectedItem();
+
         // Enable/disable fields based on selection
+        jComboBox2.setEnabled(false);
+        jTextField1.setEnabled(false);
+        jTextField2.setEnabled(false);
+        jTextField4.setEnabled(false);
+
         if ("By Student".equals(selectedType)) {
             jComboBox2.setEnabled(true);
-            jTextField1.setEnabled(false);
-            jTextField2.setEnabled(false);
-            jTextField4.setEnabled(false);
         } else if ("By Date".equals(selectedType)) {
-            jComboBox2.setEnabled(false);
             jTextField1.setEnabled(true);
-            jTextField2.setEnabled(false);
-            jTextField4.setEnabled(false);
         } else if ("By Date Range".equals(selectedType)) {
-            jComboBox2.setEnabled(false);
-            jTextField1.setEnabled(false);
             jTextField2.setEnabled(true);
             jTextField4.setEnabled(true);
-        } else {
-            jComboBox2.setEnabled(false);
-            jTextField1.setEnabled(false);
-            jTextField2.setEnabled(false);
-            jTextField4.setEnabled(false);
         }
     
         
@@ -341,81 +349,72 @@ public class AttendanceViewForm extends javax.swing.JFrame {
 private void searchAttendance() {
         String viewType = (String) jComboBox1.getSelectedItem();
         List<Attendance> attendanceList = null;
-        
+
         try {
-            System.out.println("Searching attendance with view type: " + viewType);
-            
             if ("All Records".equals(viewType)) {
-                // Get all attendance records (limited to last month)
+                // Get all attendance records for students managed by the current teacher
                 attendanceList = attendanceDAO.getAttendanceByDateRange(
-                    LocalDate.now().minusMonths(1), LocalDate.now());
-                System.out.println("Found " + (attendanceList != null ? attendanceList.size() : 0) + " records for all records");
-                
+                    LocalDate.now().minusMonths(1), LocalDate.now(), currentUser.getId()); // Last month's records
             } else if ("By Student".equals(viewType)) {
-                String selectedStudent = (String) jComboBox2.getSelectedItem();
-                if (selectedStudent != null && !"Select Student".equals(selectedStudent)) {
-                    // Extract student ID from the string (now it's a String)
-                    String studentId = extractStudentId(selectedStudent);
-                    System.out.println("Searching for student ID: " + studentId);
-                    attendanceList = attendanceDAO.getAttendanceByStudent(studentId);
-                    System.out.println("Found " + (attendanceList != null ? attendanceList.size() : 0) + " records for student " + studentId);
+                String selectedStudentString = (String) jComboBox2.getSelectedItem();
+                if (selectedStudentString != null && !"Select Student".equals(selectedStudentString)) {
+                    String studentId = extractStudentId(selectedStudentString);
+                    attendanceList = attendanceDAO.getAttendanceByStudent(studentId, currentUser.getId());
                 } else {
                     JOptionPane.showMessageDialog(this, "Please select a student!", "Selection Required", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
-                
             } else if ("By Date".equals(viewType)) {
                 String dateStr = jTextField1.getText().trim();
                 if (!dateStr.isEmpty()) {
                     LocalDate date = LocalDate.parse(dateStr);
-                    System.out.println("Searching for date: " + date);
-                    attendanceList = attendanceDAO.getAttendanceByDate(date);
-                    System.out.println("Found " + (attendanceList != null ? attendanceList.size() : 0) + " records for date " + date);
+                    attendanceList = attendanceDAO.getAttendanceByDate(date, currentUser.getId());
                 } else {
                     JOptionPane.showMessageDialog(this, "Please enter a date (YYYY-MM-DD format)!", "Input Required", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
-                
             } else if ("By Date Range".equals(viewType)) {
                 String startDateStr = jTextField2.getText().trim();
                 String endDateStr = jTextField4.getText().trim();
                 if (!startDateStr.isEmpty() && !endDateStr.isEmpty()) {
                     LocalDate startDate = LocalDate.parse(startDateStr);
                     LocalDate endDate = LocalDate.parse(endDateStr);
-                    
+
                     if (startDate.isAfter(endDate)) {
-                        JOptionPane.showMessageDialog(this, "Start date must be before end date!", "Date Error", JOptionPane.WARNING_MESSAGE);
+                        JOptionPane.showMessageDialog(this, "Start date must be before or equal to end date!", "Date Error", JOptionPane.WARNING_MESSAGE);
                         return;
                     }
-                    
-                    System.out.println("Searching for date range: " + startDate + " to " + endDate);
-                    attendanceList = attendanceDAO.getAttendanceByDateRange(startDate, endDate);
-                    System.out.println("Found " + (attendanceList != null ? attendanceList.size() : 0) + " records for date range");
+                    attendanceList = attendanceDAO.getAttendanceByDateRange(startDate, endDate, currentUser.getId());
                 } else {
                     JOptionPane.showMessageDialog(this, "Please enter both start and end dates (YYYY-MM-DD format)!", "Input Required", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
             }
-            
+
             updateTable(attendanceList);
-            
+
             if (attendanceList == null || attendanceList.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "No attendance records found for the selected criteria.", "No Data", JOptionPane.INFORMATION_MESSAGE);
             } else {
                 JOptionPane.showMessageDialog(this, "Found " + attendanceList.size() + " attendance records.", "Search Complete", JOptionPane.INFORMATION_MESSAGE);
             }
-            
+
+        } catch (java.time.format.DateTimeParseException e) {
+            JOptionPane.showMessageDialog(this, "Invalid date format! Use YYYY-MM-DD", "Date Error", JOptionPane.ERROR_MESSAGE);
+            Logger.getLogger(AttendanceViewForm.class.getName()).log(Level.SEVERE, "Date parsing error", e);
         } catch (Exception e) {
             System.err.println("Error searching attendance: " + e.getMessage());
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error searching attendance: " + e.getMessage(),
                                          "Search Error", JOptionPane.ERROR_MESSAGE);
+            Logger.getLogger(AttendanceViewForm.class.getName()).log(Level.SEVERE, "Error searching attendance", e);
         }
     }
-private void updateTable(List<Attendance> attendanceList) {
+
+    private void updateTable(List<Attendance> attendanceList) {
         DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
         model.setRowCount(0); // Clear existing data
-        
+
         if (attendanceList != null) {
             for (Attendance attendance : attendanceList) {
                 Object[] row = {
@@ -428,42 +427,22 @@ private void updateTable(List<Attendance> attendanceList) {
             }
         }
     }
- private String extractStudentId(String studentString) {
-        // Extract student ID from string like "ugr/30650/23 - John Doe"
+
+    private String extractStudentId(String studentString) {
         if (studentString != null && studentString.contains(" - ")) {
             return studentString.split(" - ")[0].trim();
         }
-        return studentString; // Return as is if format is unexpected
-    }
- // Add navigation back to dashboard
-    @Override
-public void setDefaultCloseOperation(int operation) {
-        super.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        
-        addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                goBackToDashboard();
-            }
-        });
+        return studentString;
     }
 
-   private void goBackToDashboard() {
-        this.setVisible(false);
-        AttendanceDashboard dashboard = new AttendanceDashboard();
+    private void goBackToDashboard() throws SQLException {
+        this.dispose();
+        TeacherDashboard dashboard = new TeacherDashboard();
         dashboard.setUserInfo(currentUser);
         dashboard.setVisible(true);
     }
 
-    /**
-     * @param args the command line arguments
-     */
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -471,40 +450,21 @@ public void setDefaultCloseOperation(int operation) {
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
+            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-       try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(AttendanceViewForm.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new AttendanceViewForm().setVisible(true);
+                // For testing, you might temporarily set a dummy user
+                // User dummyUser = new User(); dummyUser.setId(1); dummyUser.setUsername("testteacher"); dummyUser.setRole("Teacher");
+                // AttendanceViewForm form = new AttendanceViewForm();
+                // form.setCurrentUser(dummyUser);
+                // form.setVisible(true);
+                new LoginForm().setVisible(true); // Always start from login
             }
         });
     }
+
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;

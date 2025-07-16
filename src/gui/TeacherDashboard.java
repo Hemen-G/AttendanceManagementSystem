@@ -2,41 +2,50 @@
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
- */
-package gui;
+ */package gui;
 
+import dao.AttendanceDAO;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import models.User;
 import javax.swing.JOptionPane;
-/**
- *
- * @author HG
- */
-public class AttendanceDashboard extends javax.swing.JFrame {
+import models.Attendance;
+import utils.SessionManager;
 
-    /**
-     * Creates new form AttendanceDashboard
-     */
-    // Add these fields and methods to your AttendanceDashboard class:
+public class TeacherDashboard extends javax.swing.JFrame {
 
-// Field to store current user
-private User currentUser;
+    private User currentUser;
 
-// Method to set user information
-
-public void setUserInfo(User user) {
-    this.currentUser = user;
-    if (user != null) {
-        lblUserInfo.setText("Welcome, " +" user.getUsername()");
+    public void setUserInfo(User user) throws SQLException {
+        this.currentUser = user;
+        if (currentUser != null) {
+            lblUserInfo.setText("Welcome, " + currentUser.getUsername() + " (" + currentUser.getRole() + ")");
+        }
+        loadTeacherData(); // Load data after user is set
     }
-}
-// Method to get current user
-public User getCurrentUser() {
-    return currentUser;
-}
-    public AttendanceDashboard() {
+
+    private void loadTeacherData() throws SQLException {
+        // You can add logic here to display summary data for the teacher
+        // For example, count of students they manage, or recent attendance stats.
+        // This method is called after currentUser is set.
+    }
+
+    public TeacherDashboard() throws SQLException {
+        // Check session and role immediately in constructor
+        if (!SessionManager.isLoggedIn() || !SessionManager.hasRole("Teacher")) {
+            JOptionPane.showMessageDialog(this,
+                                         "Access denied - Teacher privileges required or not logged in.",
+                                         "Authorization Error",
+                                         JOptionPane.ERROR_MESSAGE);
+            new LoginForm().setVisible(true);
+            throw new SQLException("Access Denied"); // Throw to prevent further initialization
+        }
         initComponents();
+        setLocationRelativeTo(null); // Center the form
+        // setUserInfo will be called from LoginForm after successful login
     }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -200,66 +209,69 @@ public User getCurrentUser() {
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // TODO add your handling code here:
         if (currentUser != null) {
-        AttendanceViewForm viewForm = new AttendanceViewForm();
-        viewForm.setCurrentUser(currentUser);
-        viewForm.setVisible(true);
-        this.setVisible(false);
-    }
+            AttendanceViewForm viewForm = new AttendanceViewForm();
+            viewForm.setCurrentUser(currentUser);
+            viewForm.setVisible(true);
+            this.dispose(); // Use dispose() to release resources
+        } else {
+            JOptionPane.showMessageDialog(this, "User not logged in.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }//GEN-LAST:event_jButton2ActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         // TODO add your handling code here:
-         if (currentUser != null) {
-        AttendanceMarkingForm markingForm = new AttendanceMarkingForm();
-        markingForm.setCurrentUser(currentUser);
-        markingForm.setVisible(true);
-        this.setVisible(false);
-    }
+ if (currentUser != null) {
+            AttendanceMarkingForm markingForm = new AttendanceMarkingForm();
+            markingForm.setCurrentUser(currentUser);
+            markingForm.setVisible(true);
+            this.dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "User not logged in.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
         // TODO add your handling code here:
-        if (currentUser != null) {
-        AttendanceReportsForm reportsForm = new AttendanceReportsForm();
-        reportsForm.setCurrentUser(currentUser);
-        reportsForm.setVisible(true);
-        this.setVisible(false);
-    }
+ if (currentUser != null) {
+            AttendanceReportsForm reportsForm = new AttendanceReportsForm();
+            reportsForm.setCurrentUser(currentUser);
+            reportsForm.setVisible(true);
+            this.dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "User not logged in.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }//GEN-LAST:event_jButton3ActionPerformed
 
     private void jButton4ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton4ActionPerformed
         // TODO add your handling code here:
         if (currentUser != null) {
-        StudentManagementForm studentForm = new StudentManagementForm();
-        studentForm.setCurrentUser(currentUser);
-        studentForm.setVisible(true);
-        this.setVisible(false);
-    }
+            StudentManagementForm studentForm = new StudentManagementForm();
+            studentForm.setCurrentUser(currentUser);
+            studentForm.setVisible(true);
+            this.dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "User not logged in.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }//GEN-LAST:event_jButton4ActionPerformed
 
     private void jButton5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton5ActionPerformed
         // TODO add your handling code here:
-        int choice = JOptionPane.showConfirmDialog(this, 
-            "Are you sure you want to logout?", 
-            "Confirm Logout", 
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.QUESTION_MESSAGE);
-    
-    if (choice == JOptionPane.YES_OPTION) {
-        this.setVisible(false);
-        new LoginForm().setVisible(true);
-    }
+int choice = JOptionPane.showConfirmDialog(this,
+                                                 "Are you sure you want to logout?",
+                                                 "Confirm Logout",
+                                                 JOptionPane.YES_NO_OPTION,
+                                                 JOptionPane.QUESTION_MESSAGE);
+        if (choice == JOptionPane.YES_OPTION) {
+            SessionManager.logout(); // Clear session
+            new LoginForm().setVisible(true);
+            this.dispose();
+        }
     }//GEN-LAST:event_jButton5ActionPerformed
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
+  public static void main(String args[]) {
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -267,21 +279,15 @@ public User getCurrentUser() {
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(AttendanceDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(AttendanceDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(AttendanceDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(AttendanceDashboard.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
+            java.util.logging.Logger.getLogger(TeacherDashboard.class.getName()).log(Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-        /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new AttendanceDashboard().setVisible(true);
+                // For testing, you might temporarily set a dummy user or ensure login flow
+                // new TeacherDashboard().setVisible(true);
+                // It's better to always go through LoginForm for proper session management
+                new LoginForm().setVisible(true);
             }
         });
     }
